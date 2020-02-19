@@ -12,10 +12,10 @@ import math
 import xml.etree.ElementTree as ET
 import MAFtool
 
-DESKTOP_DIR = '/Users/hongquanli/Desktop'
+DESKTOP_DIR = 'C:\\Users\\Wang Lab\\Desktop'
 
 # microscope defination
-M = 25
+M = 10
 FOV =(11.6*1e-3/M) # in meter
 OVERLAP = 0.15
 OFFSET = 0 # offset of the center of the FOV from the coordinate read from the RGN file
@@ -101,7 +101,7 @@ class tileScanSetupGUI(QMainWindow):
     def loadAFCOffsetandZPositionFromFile(self):
         dialog = QFileDialog()
         MAFfile, _filter = dialog.getOpenFileName(None,'Open File',DESKTOP_DIR,'XML files (*.maf)')
-        if MAFfile is not '':
+        if MAFfile != '':
             AFCOffset,ZPosition = MAFtool.read_AFCOffset_and_ZPosition_from_MAF_file(MAFfile)
             self.entry_AFCOffset.setNum(AFCOffset)
             self.entry_ZPosition.setNum(ZPosition)
@@ -110,7 +110,7 @@ class tileScanSetupGUI(QMainWindow):
     def addTileRegion(self):
         dialog = QFileDialog()
         RGNfile, _filter = dialog.getOpenFileName(None,'Open File',DESKTOP_DIR,'XML files (*.rgn)')
-        if RGNfile is not '':
+        if RGNfile != '':
             # parse the RGN file
             # top(stageoverviewregions) -> regions -> shapelist -> items -> [itemX] -> verticies -> items -> [itemX] -> x,y,z
             regions_tree = ET.parse(RGNfile)

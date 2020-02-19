@@ -52,7 +52,7 @@ class XYZStagePointDefinitionList:
 
 	def export(self,filename = 'XYZStagePointDefinitionList.xml'):
 		tree = ET.ElementTree(self.top_element)
-		tree.write(filename,encoding="unicode",xml_declaration=True)
+		tree.write(filename,encoding="utf-8",xml_declaration=True)
 
 def read_AFCOffset_and_ZPosition_from_MAF_file(filename):
 	tree = ET.parse(filename)
