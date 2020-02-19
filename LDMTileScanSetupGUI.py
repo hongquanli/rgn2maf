@@ -12,7 +12,10 @@ import math
 import xml.etree.ElementTree as ET
 import MAFtool
 
-DESKTOP_DIR = 'C:\\Users\\Wang Lab\\Desktop'
+DEBUG = True
+
+# DESKTOP_DIR = 'C:\\Users\\Wang Lab\\Desktop'
+DESKTOP_DIR = os.path.expanduser("~/Desktop")
 
 # microscope defination
 M = 10
@@ -136,8 +139,9 @@ class tileScanSetupGUI(QMainWindow):
                     d = FOV*(1-OVERLAP)
                     nx = math.ceil((x1-x0)/d)
                     ny = math.ceil((y1-y0)/d)
-                    print(nx)
-                    print(ny)
+                    if DEBUG:
+                        print(nx)
+                        print(ny)
                     x_dir = 0
                     for i in range(ny):
                         x_dir = 1 - x_dir
@@ -155,6 +159,11 @@ class tileScanSetupGUI(QMainWindow):
             
     def generateLDMMAFFile(self):
         self.XYZStagePointDefinitionList.export(os.path.join(DESKTOP_DIR,self.lineEdit_MAFFileName.text() + '.maf'))
+        if DEBUG:
+            print(os.path.join(DESKTOP_DIR,self.lineEdit_MAFFileName.text() + '.maf'))
+        # empty the list
+        self.XYZStagePointDefinitionList = MAFtool.XYZStagePointDefinitionList()
+        self.regionlist.clear()
 
 # start the gui
 if __name__ == "__main__":
