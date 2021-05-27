@@ -106,7 +106,7 @@ class tileScanSetupGUI(QMainWindow):
         layout.addWidget(frame_1,0,0)
         layout.addWidget(frame_2,1,0)
         layout.addWidget(frame_3,2,0)
-        layout.addWidget(frame_4,2,0)
+        layout.addWidget(frame_4,3,0)
         self.centralWidget = QWidget()
         self.centralWidget.setLayout(layout)
         self.setCentralWidget(self.centralWidget)
