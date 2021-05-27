@@ -9,8 +9,12 @@ from qtpy.QtWidgets import *
 from qtpy.QtGui import *
 
 import math
+import numpy as np
 import xml.etree.ElementTree as ET
 import MAFtool
+
+import matplotlib.pyplot as plt
+from shapely.geometry import Polygon
 
 DEBUG = False
 
@@ -31,6 +35,7 @@ class tileScanSetupGUI(QMainWindow):
         # variables
         self.loaded_MAFfile = None
         self.XYZStagePointDefinitionList = MAFtool.XYZStagePointDefinitionList()
+        self.XYTilescoordinates = []
         
         # entry boxes and buttons
         self.entry_AFCOffset = QLabel()
@@ -86,6 +91,7 @@ class tileScanSetupGUI(QMainWindow):
         hbox.addWidget(QLabel('Z Position'))
         hbox.addWidget(self.entry_ZPosition)
         hbox.addWidget(self.button_loadAFCOffsetandZPosition)
+        self.button_loadAFCOffsetandZPosition.setEnabled(False) # disable this for now
 
         frame_3 = QFrame()
         frame_3.setLayout(hbox)
@@ -127,6 +133,7 @@ class tileScanSetupGUI(QMainWindow):
         
         dialog = QFileDialog()
         RGNfile, _filter = dialog.getOpenFileName(None,'Open File',DESKTOP_DIR,'XML files (*.rgn)')
+        
         if RGNfile != '':
             # parse the RGN file
             # top(stageoverviewregions) -> regions -> shapelist -> items -> [itemX] -> verticies -> items -> [itemX] -> x,y,z
@@ -139,10 +146,13 @@ class tileScanSetupGUI(QMainWindow):
             # update FOV
             magnification = int(self.dropdown_Magnification.currentText()[:-1])
             FOV_object = FOV/magnification
+            d = FOV_object*(1-OVERLAP)
+
             # iterate through tile regions and populate the MAFtree
             for region in regions:
                 region_type = region.find('Type')
-                # right now only implementing rectangle region
+
+                # Rectangle
                 if region_type.text == 'Rectangle':
                     self.regionlist.addItem(RGNfile)
                     verticies = region.find('Verticies')
@@ -153,7 +163,8 @@ class tileScanSetupGUI(QMainWindow):
                     point_top_right = items.find('Item3')
                     x1 = float(point_top_right.find('X').text)
                     y1 = float(point_top_right.find('Y').text)
-                    d = FOV_object*(1-OVERLAP)
+
+                    '''
                     nx = math.ceil((x1-x0)/d)
                     ny = math.ceil((y1-y0)/d)
                     if DEBUG:
@@ -169,18 +180,149 @@ class tileScanSetupGUI(QMainWindow):
                             else:
                                 x = x0 + (nx-1-j)*d
                             self.XYZStagePointDefinitionList.add_point(str(x),str(y),self.entry_AFCOffset.text(),self.entry_ZPosition.text())
-                if region_type == 'CircleDiameter':
+                    '''
+
+                    # create the rectangle
+                    polygon = Polygon([[x0,y0],[x0,y1],[x1,y1],[x1,y0]])
+                    x,y = polygon.exterior.xy
+                    plt.clf()
+                    plt.close()
+                    plt.plot(x,y)
+                    # plt.show()
+            
+                    # expand the rectangle
+                    x0 = x0 - FOV_object*OVERLAP
+                    y0 = y0 - FOV_object*OVERLAP
+                    x1 = x1 + FOV_object*OVERLAP
+                    y1 = y1 + FOV_object*OVERLAP
+                    # calculate the number of FOVs needed
+                    nx = math.ceil((x1-FOV_object-x0)/d) + 1
+                    ny = math.ceil((y1-FOV_object-y0)/d) + 1
+                    # update x1 and y1 coordinate
+                    x1 = x0 + (nx-1)*d
+                    y1 = y0 + (ny-1)*d
+                    # show the rectangle
+                    rectangle = Polygon([[x0,y0],[x0,y1+FOV_object],[x1+FOV_object,y1+FOV_object],[x1+FOV_object,y0]])
+                    x,y = rectangle.exterior.xy
+                    plt.plot(x,y,'--')
+            
+                    # go through individual tiles
+                    x_dir = 0
+                    for i in range(ny):
+                        x_dir = 1 - x_dir
+                        y = y0 + d*(i) + OFFSET
+                        for j in range(nx):
+                            if x_dir == 1:
+                                x = x0 + j*d
+                            else:
+                                x = x0 + (nx-1-j)*d
+                            fov = Polygon([[x,y],[x,y+FOV_object],[x+FOV_object,y+FOV_object],[x+FOV_object,y]])
+                            # add the FOV if it is within or intersects the polygon
+                            if fov.intersects(polygon):
+                                xi,yi = fov.exterior.xy
+                                plt.plot(xi,yi,'r')
+                                self.XYZStagePointDefinitionList.add_point(str(x+FOV_object/2),str(y+FOV_object/2),self.entry_AFCOffset.text(),self.entry_ZPosition.text())
+                                self.XYTilescoordinates.append([x,y])
+
+                    plt.axis('equal')
+                    plt.show()
+
+                # AreaLine
+                if region_type.text == 'AreaLine':
+
+                    print('parsing an AreaLine rgn file')
+                    # add the filename to the displayed list
+                    self.regionlist.addItem(RGNfile)
+
+                    # extract the vertices
+                    verticies = region.find('Verticies')
+                    items = verticies.find('Items')
+                    coordinates_verticies_list = []
+                    for item in items:
+                        # print(item.tag)
+                        x = float(item.find('X').text)
+                        y = float(item.find('Y').text)
+                        coordinates_verticies_list.append([x,y])                    
+                    coordinates_verticies_list_np = np.array(coordinates_verticies_list)
+                    # np.savetxt("rgn vertices.csv", coordinates_verticies_list_np, delimiter=",")
+
+                    # create the polygon
+                    polygon = Polygon(coordinates_verticies_list)
+                    x,y = polygon.exterior.xy
+                    plt.clf()
+                    plt.close()
+                    plt.plot(x,y)
+                    # plt.show()
+
+                    # start with a rectagular area that contains the polygon
+                    [x0,y0] = np.min(coordinates_verticies_list_np,0)
+                    [x1,y1] = np.max(coordinates_verticies_list_np,0)
+                    # expand the rectangle
+                    x0 = x0 - FOV_object*OVERLAP
+                    y0 = y0 - FOV_object*OVERLAP
+                    x1 = x1 + FOV_object*OVERLAP
+                    y1 = y1 + FOV_object*OVERLAP
+                    # calculate the number of FOVs needed
+                    nx = math.ceil((x1-FOV_object-x0)/d) + 1
+                    ny = math.ceil((y1-FOV_object-y0)/d) + 1
+                    # update x1 and y1 coordinate
+                    x1 = x0 + (nx-1)*d
+                    y1 = y0 + (ny-1)*d
+                    # show the rectangle
+                    rectangle = Polygon([[x0,y0],[x0,y1+FOV_object],[x1+FOV_object,y1+FOV_object],[x1+FOV_object,y0]])
+                    x,y = rectangle.exterior.xy
+                    plt.plot(x,y,'--')
+            
+                    # go through individual tiles
+                    x_dir = 0
+                    for i in range(ny):
+                        x_dir = 1 - x_dir
+                        y = y0 + d*(i) + OFFSET
+                        for j in range(nx):
+                            if x_dir == 1:
+                                x = x0 + j*d
+                            else:
+                                x = x0 + (nx-1-j)*d
+                            fov = Polygon([[x,y],[x,y+FOV_object],[x+FOV_object,y+FOV_object],[x+FOV_object,y]])
+                            # add the FOV if it is within or intersects the polygon
+                            if fov.intersects(polygon):
+                                xi,yi = fov.exterior.xy
+                                plt.plot(xi,yi,'r')
+                                self.XYZStagePointDefinitionList.add_point(str(x+FOV_object/2),str(y+FOV_object/2),self.entry_AFCOffset.text(),self.entry_ZPosition.text())
+                                self.XYTilescoordinates.append([x,y])
+                    plt.axis('equal')
+                    plt.show()
+
+                # CircleDiameter
+                if region_type.text == 'CircleDiameter':
                     pass
-                if region_type == 'Ellipse':
+
+                # Ellipse
+                if region_type.text == 'Ellipse':
                     pass
+
             
     def generateLDMMAFFile(self):
         self.XYZStagePointDefinitionList.export(os.path.join(DESKTOP_DIR,self.lineEdit_MAFFileName.text() + '.maf'))
         if DEBUG:
             print(os.path.join(DESKTOP_DIR,self.lineEdit_MAFFileName.text() + '.maf'))
+        # show the tiles
+        plt.clf()
+        plt.close()
+        magnification = int(self.dropdown_Magnification.currentText()[:-1])
+        FOV_object = FOV/magnification
+        d = FOV_object*(1-OVERLAP)
+        for x,y in self.XYTilescoordinates:
+            fov = Polygon([[x,y],[x,y+FOV_object],[x+FOV_object,y+FOV_object],[x+FOV_object,y]])
+            xi,yi = fov.exterior.xy
+            plt.plot(xi,yi,'r')
+        plt.axis('equal')
+        plt.show()
         # empty the list
         self.XYZStagePointDefinitionList = MAFtool.XYZStagePointDefinitionList()
+        self.XYTilescoordinates = []
         self.regionlist.clear()
+        #plt.clf()
 
 # start the gui
 if __name__ == "__main__":
